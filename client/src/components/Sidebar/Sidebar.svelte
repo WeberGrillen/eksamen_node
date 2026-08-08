@@ -51,7 +51,7 @@
         Profile
     </button>
 
-    <button class="sidebar-create-btn">
+    <button class="sidebar-create-btn" on:click={() => navigate ('/createRecipe')}>
         {@html plusIcon}
         New Recipe
     </button>

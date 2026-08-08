@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { hashPassword } from '../utils/passwordHashing.js';
 import connection from './connection.js';
 
+
 if (!process.env.ADMIN_PASSWORD) {
   throw new Error('ADMIN_PASSWORD is not set in .env');
 }
@@ -48,7 +49,8 @@ await connection.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
     position INTEGER NOT NULL,
-    text TEXT NOT NULL
+    text TEXT NOT NULL,
+    UNIQUE(recipe_id, position)
   )
 `);
 
@@ -59,9 +61,16 @@ await connection.exec(`
     recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
     position INTEGER NOT NULL,
     text TEXT NOT NULL,
-    timer_seconds INTEGER
+    timer_seconds INTEGER,
+    UNIQUE(recipe_id, position)
   )
 `);
+
+// Indexes — SQLite indekserer primary keys og UNIQUE automatisk, men ikke foreign keys.
+// recipe_ingredients og recipe_steps behøver ikke eget index: deres
+// UNIQUE(recipe_id, position) giver allerede et index hvor recipe_id står først.
+await connection.exec(`CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id)`);
+
 
 // Insert admin user
 await connection.run(
@@ -71,4 +80,4 @@ await connection.run(
   ['admin', 'admin@admin.com', ADMIN_PASSWORD]
 );
 
-process.exit(0);
+await connection.close();

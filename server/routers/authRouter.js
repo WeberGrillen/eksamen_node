@@ -17,9 +17,17 @@ router.post('/api/auth/register', async (req, res) => {
         });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(email)) {
+        return res.status(400).send({
+            data: { errorMessage: "Invalid email format" }
+        });
+    }
+
     if (password !== confirmPassword) {
         return res.status(400).send({
-            data: {errorMessage: "Passwords do not match"}
+            data: { errorMessage: "Passwords do not match" }
         });
     }
 
@@ -51,7 +59,7 @@ router.post('/api/auth/register', async (req, res) => {
 
     await sendConfirmationEmail (name, email);
     res.status(201).send({
-        data: { successMessage: "Acount created!" }
+        data: { successMessage: "Account created!" }
     });
 });
 
@@ -88,7 +96,9 @@ router.post('/api/auth/login', async (req, res) => {
         const { password: _, ...safeUser } = user;
         req.session.user = safeUser;
         res.status(200).send({
-            data: { successMessage: "Login successfull" }
+            data: { successMessage: "Login successful",
+                    user: safeUser
+            }
         });
 
     } catch (error) {

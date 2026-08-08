@@ -15,8 +15,8 @@ router.get('/api/recipes', async (req, res) => {
         });
     } catch (error) {
         res.status(500).send({
-            data: { errorMessage: 'Could not fetch recipes', error }}
-        );
+            data: { errorMessage: 'Could not fetch recipes' }
+        });
     }
 });
 
@@ -58,7 +58,7 @@ router.get('/api/recipes/:id', async (req, res) => {
 
     } catch (error) {
         res.status(500).send({
-            data: { errorMessage: 'Could not fetch recipe', error }
+            data: { errorMessage: 'Could not fetch recipe' }
         });
     }
 });
@@ -68,9 +68,21 @@ router.get('/api/recipes/:id', async (req, res) => {
 router.post('/api/recipes', isLoggedIn, async (req, res) => {
     const { title, description, imageData, category, totalMinutes, servings, difficulty, ingredients, steps } = req.body;
 
-    if (!title || !ingredients?.length || !steps?.length) {
+    if (!title?.trim()) {
         return res.status(400).send({
-            data: { errorMessage: 'Title, ingredients and steps are required'}
+            data: { errorMessage: "Title is required" }
+        });
+    }
+
+    if (!Array.isArray(ingredients) || ingredients.length === 0) {
+        return res.status(400).send({
+            data: { errorMessage: "At least one ingredient is required" }
+        });
+    }
+
+    if (!Array.isArray(steps) || steps.length === 0) {
+        return res.status(400).send({
+            data: { errorMessage: "At least one step is required" }
         });
     }
 
@@ -98,7 +110,7 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
             await db.run(
                 `INSERT INTO recipe_steps (recipe_id, position, text, timer_seconds)
                  VALUES (?, ?, ?, ?)`,
-                [recipeId, i + 1, steps[i].text, steps[i].timerSeconds ?? null]
+                [recipeId, i + 1, steps[i]?.text, steps[i].timerSeconds ?? null]
             );
         }
 
@@ -109,14 +121,11 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
         });
 
     } catch (error) {
-        try {
-            await db.exec('ROLLBACK');
+        console.error('POST /api/recipes failed:', error);
+        await db.exec('ROLLBACK');
             
-        } catch (rollbackError) {
-            console.error('Rollback error:', rollbackError);
-        }
-        res.status(500).send({
-            data: { errorMessage: 'Could not create recipe', error}
+        return res.status(500).send({
+            data: { errorMessage: 'Could not create recipe' }
         });
     }
 });

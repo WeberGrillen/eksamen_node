@@ -6,4 +6,6 @@ const connection = await open({
     driver: sqlite3.Database
 });
 
+await connection.exec('PRAGMA foreign_keys = ON'); // will make delete on cascade work
+
 export default connection;
