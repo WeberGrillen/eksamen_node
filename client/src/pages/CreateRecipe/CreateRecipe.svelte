@@ -3,7 +3,8 @@
     import { fetchPost } from '../../util/fetchUtil.js';
     import { toast } from 'svelte-sonner';
 
-    import backIcon from '../../assets/arrow-left.svg?raw'
+    import closeIcon from '../../assets/x.svg?raw';
+    import imageIcon from '../../assets/image.svg?raw';
 
     function goBack() {
         window.history.back();
@@ -76,6 +77,11 @@
         try {
             const result = await fetchPost('/api/recipes', {
                 title: title.trim(),
+                description: description.trim() || null,
+                category: category || null,
+                difficulty: difficulty || null,
+                totalMinutes: totalMinutes === '' ? null : Number(totalMinutes),
+                servings: servings === '' ? null : Number(servings),
                 imageData: imageData || null,
                 ingredients: cleanIngredients,
                 steps: cleanSteps
@@ -83,83 +89,92 @@
 
             toast.success(result.data.successMessage)
             navigate('/home');
-
         } catch (error) {
             toast.error(error?.data?.errorMessage ?? 'Could not create recipe');
         }
     }
-
 </script>
 
 <main class="recipe-page">
-    <div class="recipe-container">
-        <header class="recipe-header">
-            <button class="back-btn" on:click={goBack}>
-                {@html backIcon}
-                Back
-            </button>
-            <div class="recipe-header-title">
-                <span>NEW RECIPE</span>
-                <h2>Tell us what you're cooking</h2>
-            </div>
-        </header>
-        
-        <form class="create-recipe-form" on:submit|preventDefault={handleSubmit}>
-            <div class="titel-time-input">
-                <div class="first-div">
-                    <input class="recipe-title-input" type="text" bind:value={title} placeholder="Recipe title">
-                    <input class="recipe-total-time-input" type="number" bind:value={totalMinutes} placeholder="Total time (min.)">
-                </div>
-                <input class="recipe-img-input" type="file" accept="image/*" on:change={handleFile} />
-            </div>
-            
-            
-            <div class="second-div">
-                <p class="create-recipe-subtitle">Ingredients</p>
-                <fieldset class="recipe-section"> 
-                    {#each ingredients as ingredient, index}
-                        <div class="list-row">
-                            <input class="fieldset-input" type="text" bind:value={ingredients[index]}
-                                placeholder="Enter ingredient here" />
-                            {#if ingredients.length > 1}
-                                <button class="remove-button" type="button"
-                                    on:click={() => removeIngredient(index)}>X</button>
-                            {/if}
-                        </div>
-                    {/each}
-                    <button class="recipe-button" type="button" on:click={addIngredient}>+ Add ingredient</button>
-                </fieldset>
-            </div>
-            
-            <div class="third-div">
-                <p class="create-recipe-subtitle">Steps</p>
-                <fieldset class="recipe-section">
-                    {#each steps as step, index}
-                        <div class="list-row">
-                            <input class="fieldset-input" type="text" bind:value={steps[index].text}
-                                placeholder="Preheat the oven to 200°C" />
-                            <input class="fieldset-input step-timer" type="number" min="0"
-                                bind:value={steps[index].minutes} placeholder="min" />
-                            {#if steps.length > 1}
-                                <button class="remove-button" type="button"
-                                    on:click={() => removeStep(index)}>X</button>
-                            {/if}
-                        </div>
-                    {/each}
-                    <button class="recipe-button" type="button" on:click={addStep}>+ Add step</button>
-                </fieldset>
-            </div>
-            
+    <div class="recipe-modal">
+    <button class="close-btn" type="button" on:click={goBack} aria-label="Close">
+      {@html closeIcon}
+    </button>
 
-            
+    <h2 class="modal-title">New recipe</h2>
 
-            {#if imageData} 
-                <img src={imageData} alt={title} class="image-preview" />
+    <form class="create-recipe-form" on:submit|preventDefault={handleSubmit}>
+        <input class="field" type="text" bind:value={title} placeholder="Recipe title" />
+
+        <textarea class="field field-textarea" bind:value={description}
+            placeholder="Description — what makes this one worth cooking?"></textarea>
+
+        <label class="photo-drop">
+            {#if imageData}
+                <img src={imageData} alt="" class="photo-preview" />
+            {:else}
+                {@html imageIcon}
+                <span class="photo-drop-title">Add a photo</span>
+                <span class="photo-drop-hint">PNG or JPG, up to 5 MB</span>
             {/if}
+            <input type="file" accept="image/*" on:change={handleFile} />
+        </label>
 
-            <button type="submit">Save recipe</button>
+        <div class="field-grid">
+            <select class="field field-select" bind:value={category}>
+                <option value="" disabled>Category…</option>
+                <option value="Breakfast">Breakfast</option>
+                <option value="Lunch">Lunch</option>
+                <option value="Dinner">Dinner</option>
+                <option value="Dessert">Dessert</option>
+                <option value="Snack">Snack</option>
+                <option value="Drinks">Drinks</option>
+            </select>
 
-        </form>
-    </div>
+            <select class="field field-select" bind:value={difficulty}>
+                <option value="" disabled>Difficulty…</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+            </select>
 
+            <input class="field" type="number" min="0" bind:value={totalMinutes} placeholder="Total minutes" />
+            <input class="field" type="number" min="1" bind:value={servings} placeholder="Servings" />
+        </div>
+
+        <fieldset class="recipe-section">
+            <legend class="create-recipe-subtitle">Ingredients</legend>
+            {#each ingredients as ingredient, index}
+                <div class="list-row">
+                    <input class="field" type="text" bind:value={ingredients[index]}
+                        placeholder="e.g. 2 cups flour" />
+                    {#if ingredients.length > 1}
+                        <button class="remove-button" type="button"
+                            on:click={() => removeIngredient(index)} aria-label="Remove ingredient">×</button>
+                    {/if}
+                </div>
+            {/each}
+            <button class="recipe-button" type="button" on:click={addIngredient}>+ Add ingredient</button>
+        </fieldset>
+
+        <fieldset class="recipe-section">
+            <legend class="create-recipe-subtitle">Steps</legend>
+            {#each steps as step, index}
+                <div class="list-row">
+                    <input class="field" type="text" bind:value={steps[index].text}
+                        placeholder="Describe this step" />
+                    <input class="field step-timer" type="number" min="0"
+                        bind:value={steps[index].minutes} placeholder="min" />
+                    {#if steps.length > 1}
+                        <button class="remove-button" type="button"
+                            on:click={() => removeStep(index)} aria-label="Remove step">×</button>
+                    {/if}
+                </div>
+            {/each}
+            <button class="recipe-button" type="button" on:click={addStep}>+ Add step</button>
+        </fieldset>
+
+      <button class="submit-button" type="submit">Publish recipe</button>
+    </form>
+  </div>
 </main>

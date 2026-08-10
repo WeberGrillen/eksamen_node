@@ -1,7 +1,6 @@
 import { Router } from "express";
 import db from '../database/connection.js';
 import { compareHashedPasswords, hashPassword } from "../utils/passwordHashing.js";
-import { sendConfirmationEmail } from '../utils/emailService.js';
 
 const router = Router();
 
@@ -57,7 +56,6 @@ router.post('/api/auth/register', async (req, res) => {
         });
     }
 
-    await sendConfirmationEmail (name, email);
     res.status(201).send({
         data: { successMessage: "Account created!" }
     });
@@ -102,7 +100,6 @@ router.post('/api/auth/login', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Login error:', error);
         return res.status(500).send({
             data: { errorMessage: "Something went wrong" }
         });

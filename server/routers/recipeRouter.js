@@ -7,11 +7,13 @@ const router = Router();
 router.get('/api/recipes', async (req, res) => {
     try {
         const result = await db.all(`
-            SELECT * FROM recipes
-            ORDER BY created_at DESC`
-        );
+            SELECT r.*, u.name AS author_name
+            FROM recipes r
+            LEFT JOIN users u ON u.id = r.user_id
+            ORDER BY r.created_at DESC
+        `);
         res.status(200).send({
-            data: result
+            data: { recipes: result}
         });
     } catch (error) {
         res.status(500).send({
@@ -25,7 +27,10 @@ router.get('/api/recipes/:id', async (req, res) => {
 
     try {
         const recipe = await db.get(`
-            SELECT * FROM recipes WHERE id = ?`,
+            SELECT r.*, u.name AS author_name
+            FROM recipes r
+            LEFT JOIN users u ON u.id = r.user_id
+            WHERE r.id = ?`,
             [id]
         );
 
@@ -68,37 +73,62 @@ router.get('/api/recipes/:id', async (req, res) => {
 router.post('/api/recipes', isLoggedIn, async (req, res) => {
     const { title, description, imageData, category, totalMinutes, servings, difficulty, ingredients, steps } = req.body;
 
+    const cleanIngredients = (Array.isArray(ingredients) ? ingredients : [])
+        .map((text) => String(text ?? '').trim())
+        .filter((text) => text !== '');
+
+    const cleanSteps = (Array.isArray(steps) ? steps : [])
+        .filter((step) => step?.text?.trim())
+        .map((step) => ({ text: step.text.trim(), timerSeconds: step.timerSeconds ?? null }));
+
     if (!title?.trim()) {
         return res.status(400).send({
             data: { errorMessage: "Title is required" }
         });
     }
 
-    if (!Array.isArray(ingredients) || ingredients.length === 0) {
+    if (cleanIngredients.length === 0) {
         return res.status(400).send({
             data: { errorMessage: "At least one ingredient is required" }
         });
     }
 
-    if (!Array.isArray(steps) || steps.length === 0) {
+    if (cleanSteps.length === 0) {
         return res.status(400).send({
             data: { errorMessage: "At least one step is required" }
         });
     }
 
+    const MAX_IMAGE_CHARS= 2_000_000;
+
+    if (imageData) {
+        if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) {
+            return res.status(400).send({
+                data: { errorMessage: "Invaild image"}  
+            });
+        }
+        if (imageData.length > MAX_IMAGE_CHARS) {
+            return res.status(400).send({
+                data: { errorMessage: "Image is too large"}
+            });
+        }
+    }
+    console.log('category:', JSON.stringify(req.body.category));
 
     try{
         await db.exec('BEGIN TRANSACTION');
         
+        
         const recipeResult = await db.run(`
             INSERT INTO recipes (user_id, title, description, image_data, category, total_minutes, servings, difficulty)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [req.session.user.id, title, description, imageData, category, totalMinutes, servings, difficulty]
+            [req.session.user.id, title.trim(), description ?? null, imageData ?? null,
+             category ?? null, totalMinutes ?? null, servings ?? null, difficulty ?? null]
         );
         
         const recipeId = recipeResult.lastID;
 
-        for (let i = 0; i < ingredients.length; i++) {
+        for (let i = 0; i < cleanIngredients.length; i++) {
             await db.run(`
                 INSERT INTO recipe_ingredients (recipe_id, position, text)
                 VALUES (?, ?, ?)`,
@@ -106,7 +136,7 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
             );
         }
 
-        for (let i = 0; i < steps.length; i++) {
+        for (let i = 0; i < cleanSteps.length; i++) {
             await db.run(
                 `INSERT INTO recipe_steps (recipe_id, position, text, timer_seconds)
                  VALUES (?, ?, ?, ?)`,
@@ -122,8 +152,8 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
 
     } catch (error) {
         console.error('POST /api/recipes failed:', error);
-        await db.exec('ROLLBACK');
-            
+        try { await db.exec('ROLLBACK'); } catch {}
+       
         return res.status(500).send({
             data: { errorMessage: 'Could not create recipe' }
         });

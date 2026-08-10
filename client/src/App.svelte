@@ -8,8 +8,12 @@
   import Landing from './pages/Landing/Landing.svelte';
   import Home from './pages/Home/Home.svelte';
   import CreateRecipe from './pages/CreateRecipe/CreateRecipe.svelte';
+  import Discover from './pages/Discover/Discover.svelte';
+  import Recipe from './pages/Recipe/Recipe.svelte';
+  
 
   import PrivateRoute from './components/PrivateRoute/PrivateRoute.svelte';
+  
 </script>
 
 <Toaster/>
@@ -36,6 +40,18 @@
     <Route path='/profile'>
       <PrivateRoute>
         <Profile /> 
+      </PrivateRoute>
+    </Route>
+
+    <Route path='/discover'>
+      <PrivateRoute>
+          <Discover />
+      </PrivateRoute>
+    </Route>
+
+    <Route path='/recipes/:id' let:params>
+      <PrivateRoute>
+        <Recipe id={params.id} />
       </PrivateRoute>
     </Route>
     

@@ -3,6 +3,8 @@
     import { fetchPost } from '../../util/fetchUtil.js';
     import { toast } from 'svelte-sonner';
 
+    export let mode = 'register';
+
     let name = '';
     let email = '';
     let password = '';
@@ -39,7 +41,7 @@
 
 <main class="auth-page">
     <div class="auth-container">
-         <aside class="auth-sidebar">
+         <aside class="auth-sidebar" class:register={mode === 'register'}>
             <div class="auth-sidebar-content">
                 <h2 class="auth-sidebar-lable">WELCOME TO FOODIE</h2>
                 <h1 class="auth-sidebar-title">Your kitchen, on the internet.</h1>

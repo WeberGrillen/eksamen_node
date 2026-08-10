@@ -4,7 +4,9 @@
     import { fetchPost } from '../../util/fetchUtil.js';
     import { toast } from 'svelte-sonner';
 
+    export let mode = 'login';
 
+    $: isRegister = mode === 'register';
 
     let email = '';
     let password = '';
