@@ -68,8 +68,6 @@ router.get('/api/recipes/:id', async (req, res) => {
     }
 });
 
-
-
 router.post('/api/recipes', isLoggedIn, async (req, res) => {
     const { title, description, imageData, category, totalMinutes, servings, difficulty, ingredients, steps } = req.body;
 
@@ -156,6 +154,37 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
        
         return res.status(500).send({
             data: { errorMessage: 'Could not create recipe' }
+        });
+    }
+});
+
+router.delete('/api/recipes/:id', isLoggedIn, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const recipe = await db.get(`SELECT user_id FROM recipes WHERE id = ?`, [id]);
+
+        if (!recipe) {
+            return res.status(404).send({
+                data: { errorMessage: 'Recipe not found' }
+            });
+        }
+
+        if (recipe.user_id !== req.session.user.id) {
+            return res.status(403).send({
+                data: { errorMessage: 'You can only delete your own recipes' }
+            });
+        }
+
+        await db.run(`DELETE FROM recipes WHERE id = ?`, [id]);
+
+        res.status(200).send({
+            data: { successMessage: 'Recipe deleted' }
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).send({
+            data: { errorMessage: 'Could not delete recipe' }
         });
     }
 });

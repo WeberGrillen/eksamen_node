@@ -6,10 +6,15 @@
     import plusIcon from '../../assets/plus.svg?raw';
     import xIcon from '../../assets/x.svg?raw';
 
-    import { Router, Link, navigate, link } from "svelte-routing";
+    import { Link, navigate, link } from "svelte-routing";
     import { toast } from "svelte-sonner";
     import { fetchPost } from "../../util/fetchUtil";
     import { user } from "../../stores/userStore";
+
+    const navClass = ({ isCurrent }) => ({
+        class: isCurrent ? 'sidebar-btn active' : 'sidebar-btn'
+    });
+
 
     async function logout() {
 
@@ -24,32 +29,33 @@
         }
     };
 
-    let showLoginModal = false;
+    
+
 </script>
 
 
 <nav class="sidebar">
-<Link to="/" class="sidebar-brand">Foodie</Link>
+    <Link to="/" class="sidebar-brand">Foodie</Link>
 
-    <button class="sidebar-btn" on:click={() => navigate ('/')}>
+    <Link to="/" getProps={navClass}>
         {@html homeIcon}
         Home
-    </button>
+    </Link>
 
-    <button class="sidebar-btn" on:click={() => navigate ('/discover')}>
+    <Link to="/discover" getProps={navClass}>
         {@html DiscoverIcon}
         Discover
-    </button>
+    </Link>
 
-    <button class="sidebar-btn" on:click={() => navigate ('/saved')}>
+    <Link to="/saved" getProps={navClass}>
         {@html savedIcon}
         Saved
-    </button>
+    </Link>
 
-    <button class="sidebar-btn" on:click={() => navigate ('/profile')}>
+    <Link to="/profile" getProps={navClass}>
         {@html profileIcon}
         Profile
-    </button>
+    </Link>
 
     <button class="sidebar-create-btn" on:click={() => navigate ('/createRecipe')}>
         {@html plusIcon}

@@ -46,9 +46,59 @@ export async function fetchPost(endpoint, body = {}) {
             throw error;
         } else {
             throw { data: {
-                errorMessage: "Server could not Post data"
+                errorMessage: "Server could not post data"
             }}
         }
     }
-        
+}
+
+
+export async function fetchPatch(endpoint, body = {}) {
+
+    try {
+        const response = await fetch(BASE_URL + endpoint, {
+            method: "PATCH",
+            credentials: 'include',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            throw await response.json();
+        }
+        return await response.json();
+
+    } catch(error) {
+        if (error?.data?.errorMessage) {
+            throw error;
+        } else {
+            throw { data: {
+                errorMessage: "Server could not update data"
+            }};
+        }
+    }
+}
+
+export async function fetchDelete(endpoint) {
+
+    try {
+        const response = await fetch(BASE_URL + endpoint, {
+            method: "DELETE",
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw await response.json();
+        }
+        return await response.json();
+
+    } catch(error) {
+        if (error?.data?.errorMessage) {
+            throw error;
+        } else {
+            throw { data: {
+                errorMessage: "Server could not delete data"
+            }};
+        }
+    }
 }
