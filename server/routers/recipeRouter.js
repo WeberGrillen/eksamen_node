@@ -25,13 +25,18 @@ router.get('/api/recipes', async (req, res) => {
 router.get('/api/recipes/:id', async (req, res) => {
     const { id } = req.params;
 
+    const currentUserId = req.session.user?.id ?? 0;
+
     try {
         const recipe = await db.get(`
-            SELECT r.*, u.name AS author_name
+            SELECT r.*, u.name AS author_name,
+                (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count,
+                EXISTS(SELECT 1 FROM recipe_likes
+                        WHERE user_id = ? AND recipe_id = r.id) AS is_liked
             FROM recipes r
             LEFT JOIN users u ON u.id = r.user_id
             WHERE r.id = ?`,
-            [id]
+            [currentUserId, id]
         );
 
         if (!recipe) {
@@ -67,6 +72,7 @@ router.get('/api/recipes/:id', async (req, res) => {
         });
     }
 });
+
 
 router.post('/api/recipes', isLoggedIn, async (req, res) => {
     const { title, description, imageData, category, totalMinutes, servings, difficulty, ingredients, steps } = req.body;

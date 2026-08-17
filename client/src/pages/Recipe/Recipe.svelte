@@ -1,28 +1,55 @@
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { navigate } from 'svelte-routing';
     import { toast } from 'svelte-sonner';
     import { fetchGet } from '../../util/fetchUtil';
+    import { BASE_URL } from '../../stores/generalStore';
+    import io from 'socket.io-client';
     import CookingMode from '../../components/CookingMode/CookingMode.svelte';
+    import heartIcon from '../../assets/heart.svg?raw';
+    import heartFilledIcon from '../../assets/heart-fill.svg?raw';
 
     export let id;
 
+    let socket;
     let recipe = null;
     let loading = true;
     let checked = {};
-
     let cooking = false;
+
+    let likeCount = 0;
+    let liked = false;
 
     onMount(async () => {
         try {
             const result = await fetchGet(`/api/recipes/${id}`);
             recipe = result.data.recipe;
+            likeCount = recipe.like_count;
+            liked = !!recipe.is_liked;
         } catch (error) {
-            toast.error(error.data.errorMessage);
+            toast.error(error?.data?.errorMessage ?? 'Could not load recipe');
         } finally {
             loading = false;
         }
+
+        socket = io($BASE_URL, {
+            withCredentials: true
+        });
+
+        socket.on("server-sends-like-count", (data) => {
+            if (data.recipeId === Number(id)) likeCount = data.count;
+        })
+
+        socket.on("server-sends-like-state", (data => {
+            if (data.recipeId === Number(id)) liked = data.liked;
+        }))
     });
+
+    onDestroy(() => socket?.disconnect());
+
+    function toggleLike() {
+        socket?.emit("client-toggles-like", { recipeId: Number(id) });
+    }
 
     function formatTimer(seconds) {
         return `${Math.round(seconds / 60)} min`;
@@ -50,7 +77,14 @@
         <header class="recipe-header">
             <div class="recipe-header-top">
                 <h1>{recipe.title}</h1>
-                <button class="cook-btn" on:click={() => cooking = true}>▶ Start Cooking</button>
+                <div class="recipe-header-actions">
+                    <button class="like-btn" class:liked on:click={toggleLike}>
+                        <span class="heart">
+                            {@html liked ? heartFilledIcon : heartIcon}</span>
+                        {likeCount}
+                    </button>
+                    <button class="cook-btn" on:click={() => cooking = true}>▶ Start Cooking</button>
+                </div>
             </div>
             <div class="recipe-header-bottom">
                 <div class="recipe-author">

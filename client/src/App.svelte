@@ -63,6 +63,12 @@
       </PrivateRoute>
     </Route>
 
+    <Route path='/users/:id' let:params>
+      <PrivateRoute>
+        <Profile id={params.id} />
+      </PrivateRoute>
+    </Route>
+
     
 
     

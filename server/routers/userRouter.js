@@ -5,6 +5,7 @@ import db from '../database/connection.js';
 const router = Router();
 
 router.get('/api/users', isLoggedIn, async (req, res) => {
+
     const currentUserId = req.session.user?.id ?? 0;
 
     try {
@@ -28,13 +29,18 @@ router.get('/api/users', isLoggedIn, async (req, res) => {
 });
 
 router.get('/api/users/:id/profile', isLoggedIn, async (req, res) => {
-    const { id } = req.params;
 
+    const { id } = req.params;
+    const currentUserId = req.session.user?.id ?? 0;
+    
     try {
         const profile = await db.get(`
-            SELECT id, name, bio, avatar_data, banner_data
-            FROM users WHERE id = ?`,
-            [id]
+            SELECT u.id, u.name, u.bio, u.avatar_data, u.banner_data,
+                EXISTS(SELECT 1 FROM follows
+                        WHERE follower_id = ? AND followed_id = u.id) AS is_following
+            FROM users u
+            WHERE u.id = ?`,
+            [currentUserId, id]
         );
 
         if (!profile) {

@@ -1,12 +1,15 @@
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { navigate } from 'svelte-routing';
-    import { fetchGet, fetchPost, fetchDelete } from '../../util/fetchUtil';
-    import Navbar from '../../components/Sidebar/Sidebar.svelte';
+    import { toast } from 'svelte-sonner';
+    import { fetchGet } from '../../util/fetchUtil';
+    import { BASE_URL } from '../../stores/generalStore';
+    import io from 'socket.io-client';
     import searchIcon from '../../assets/search.svg?raw';
     import RecipeCard from '../../components/RecipeCard/RecipeCard.svelte';
-    import { toast } from 'svelte-sonner';
+    
 
+    let socket;
     let recipes = [];
     let users = [];
     let query = '';
@@ -42,35 +45,29 @@
         }
 
         loading = false;
+
+        socket = io($BASE_URL, {
+            withCredentials: true
+        });
+
+        socket.on("server-sends-follower-count", (data) => {
+            users = users.map((u) =>
+                u.id === Number(data.userId) ? { ...u, follower_count: data.count } : u
+            );
+        });
+
+        socket.on("server-sends-follow-state", (data) => {
+            users = users.map((u) =>
+                u.id === Number(data.userId) ? { ...u, is_following: data.following } : u
+            );
+        });
     });
 
-    async function toggleFollow(event, person) {
+    onDestroy(() => socket?.disconnect());
+
+    function toggleFollow(event, person) {
         event.stopPropagation();
-
-        const wasFollowing = person.is_following;
-
-        users = users.map((u) =>
-            u.id === person.id
-                ? { ...u, is_following: !wasFollowing,
-                    follower_count: u.follower_count + (wasFollowing ? -1 : 1) }
-                : u
-        );
-
-        try {
-            if (wasFollowing) {
-                await fetchDelete(`/api/users/${person.id}/follow`);
-            } else {
-                await fetchPost(`/api/users/${person.id}/follow`);
-            }
-        } catch (error) {
-            users = users.map((u) =>
-                u.id === person.id
-                    ? { ...u, is_following: wasFollowing,
-                        follower_count: u.follower_count + (wasFollowing ? 1 : -1) }
-                    : u
-            );
-            toast.error(error.data.errorMessage);
-        }
+        socket?.emit("client-toggles-follow", { userId: person.id });
     }
 
 </script>
