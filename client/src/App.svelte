@@ -8,6 +8,7 @@
   import Landing from './pages/Landing/Landing.svelte';
   import Home from './pages/Home/Home.svelte';
   import CreateRecipe from './pages/CreateRecipe/CreateRecipe.svelte';
+  import EditRecipe from './pages/EditRecipe/EditRecipe.svelte';
   import Discover from './pages/Discover/Discover.svelte';
   import Recipe from './pages/Recipe/Recipe.svelte';
   import Profile from './pages/Profile/Profile.svelte';
@@ -50,6 +51,12 @@
       </PrivateRoute>
     </Route>
 
+    <Route path='/recipes/:id/edit' let:params>
+      <PrivateRoute>
+        <EditRecipe id={params.id} />
+      </PrivateRoute>
+    </Route>
+
     <Route path='/recipes/:id' let:params>
       <PrivateRoute>
         <Recipe id={params.id} />
@@ -58,8 +65,8 @@
 
     
 
-  </div> 
-  
     
+
+    </div> 
   </div>
 </Router>

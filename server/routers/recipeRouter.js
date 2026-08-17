@@ -79,6 +79,24 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
         .filter((step) => step?.text?.trim())
         .map((step) => ({ text: step.text.trim(), timerSeconds: step.timerSeconds ?? null }));
 
+    const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Drinks'];
+    const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+
+    const cleanCategory = category?.trim() || null;
+    const cleanDifficulty = difficulty?.trim() || null;
+
+    if (cleanCategory && !CATEGORIES.includes(cleanCategory)) {
+        return res.status(400).send({
+            data: { errorMessage: "Please choose a valid category" }
+        });
+    }
+
+    if (cleanDifficulty && !DIFFICULTIES.includes(cleanDifficulty)) {
+        return res.status(400).send({
+            data: { errorMessage: "Please choose a valid difficulty" }
+        });
+    }
+
     if (!title?.trim()) {
         return res.status(400).send({
             data: { errorMessage: "Title is required" }
@@ -102,7 +120,7 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
     if (imageData) {
         if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) {
             return res.status(400).send({
-                data: { errorMessage: "Invaild image"}  
+                data: { errorMessage: "Invalid image"}  
             });
         }
         if (imageData.length > MAX_IMAGE_CHARS) {
@@ -111,7 +129,6 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
             });
         }
     }
-    console.log('category:', JSON.stringify(req.body.category));
 
     try{
         await db.exec('BEGIN TRANSACTION');
@@ -121,7 +138,7 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
             INSERT INTO recipes (user_id, title, description, image_data, category, total_minutes, servings, difficulty)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [req.session.user.id, title.trim(), description ?? null, imageData ?? null,
-             category ?? null, totalMinutes ?? null, servings ?? null, difficulty ?? null]
+             cleanCategory ?? null, totalMinutes ?? null, servings ?? null, cleanDifficulty ?? null]
         );
         
         const recipeId = recipeResult.lastID;
@@ -130,7 +147,7 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
             await db.run(`
                 INSERT INTO recipe_ingredients (recipe_id, position, text)
                 VALUES (?, ?, ?)`,
-                [recipeId, i + 1, ingredients[i]]
+                [recipeId, i + 1, cleanIngredients[i]]
             );
         }
 
@@ -138,7 +155,7 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
             await db.run(
                 `INSERT INTO recipe_steps (recipe_id, position, text, timer_seconds)
                  VALUES (?, ?, ?, ?)`,
-                [recipeId, i + 1, steps[i]?.text, steps[i].timerSeconds ?? null]
+                [recipeId, i + 1, cleanSteps[i]?.text, cleanSteps[i].timerSeconds ?? null]
             );
         }
 
@@ -158,6 +175,135 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
     }
 });
 
+router.patch('/api/recipes/:id', isLoggedIn, async (req, res) => {
+    const recipeId = Number(req.params.id);
+    const { title, description, imageData, category, totalMinutes,
+            servings, difficulty, ingredients, steps } = req.body;
+
+    const cleanIngredients = (Array.isArray(ingredients) ? ingredients : [])
+        .map((text) => String(text ?? '').trim())
+        .filter((text) => text !== '');
+
+    const cleanSteps = (Array.isArray(steps) ? steps : [])
+        .filter((step) => step?.text?.trim())
+        .map((step) => ({ text: step.text.trim(), timerSeconds: step.timerSeconds ?? null }));
+
+    const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Drinks'];
+    const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+
+    const cleanCategory = category?.trim() || null;
+    const cleanDifficulty = difficulty?.trim() || null;
+
+    if (cleanCategory && !CATEGORIES.includes(cleanCategory)) {
+        return res.status(400).send({
+            data: { errorMessage: "Please choose a valid category" }
+        });
+    }
+
+    if (cleanDifficulty && !DIFFICULTIES.includes(cleanDifficulty)) {
+        return res.status(400).send({
+            data: { errorMessage: "Please choose a valid difficulty" }
+        });
+    }
+
+    if (!title?.trim()) {
+        return res.status(400).send({
+            data: { errorMessage: "Title is required" }
+        });
+    }
+
+    if (cleanIngredients.length === 0) {
+        return res.status(400).send({
+            data: { errorMessage: "At least one ingredient is required" }
+        });
+    }
+
+    if (cleanSteps.length === 0) {
+        return res.status(400).send({
+            data: { errorMessage: "At least one step is required" }
+        });
+    }
+
+    const MAX_IMAGE_CHARS = 2_000_000;
+
+    if (imageData) {
+        if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) {
+            return res.status(400).send({
+                data: { errorMessage: "Invalid image" }
+            });
+        }
+        if (imageData.length > MAX_IMAGE_CHARS) {
+            return res.status(400).send({
+                data: { errorMessage: "Image is too large" }
+            });
+        }
+    }
+
+    try {
+        const existing = await db.get(`SELECT user_id FROM recipes WHERE id = ?`, [recipeId]);
+
+        if (!existing) {
+            return res.status(404).send({
+                data: { errorMessage: 'Recipe not found' }
+            });
+        }
+
+        if (existing.user_id !== req.session.user.id) {
+            return res.status(403).send({
+                data: { errorMessage: 'You can only edit your own recipes' }
+            });
+        }
+
+        await db.exec('BEGIN TRANSACTION');
+
+        await db.run(`
+            UPDATE recipes SET
+                title = ?,
+                description = ?,
+                image_data = COALESCE(?, image_data),
+                category = ?,
+                total_minutes = ?,
+                servings = ?,
+                difficulty = ?
+            WHERE id = ?`,
+            [title.trim(), description ?? null, imageData ?? null, cleanCategory ?? null,
+             totalMinutes ?? null, servings ?? null, cleanDifficulty ?? null, recipeId]
+        );
+
+        await db.run(`DELETE FROM recipe_ingredients WHERE recipe_id = ?`, [recipeId]);
+        await db.run(`DELETE FROM recipe_steps WHERE recipe_id = ?`, [recipeId]);
+
+        for (let i = 0; i < cleanIngredients.length; i++) {
+            await db.run(`
+                INSERT INTO recipe_ingredients (recipe_id, position, text)
+                VALUES (?, ?, ?)`,
+                [recipeId, i + 1, cleanIngredients[i]]
+            );
+        }
+
+        for (let i = 0; i < cleanSteps.length; i++) {
+            await db.run(`
+                INSERT INTO recipe_steps (recipe_id, position, text, timer_seconds)
+                VALUES (?, ?, ?, ?)`,
+                [recipeId, i + 1, cleanSteps[i].text, cleanSteps[i].timerSeconds]
+            );
+        }
+
+        await db.exec('COMMIT');
+
+        res.status(200).send({
+            data: { successMessage: 'Recipe updated' }
+        });
+
+    } catch (error) {
+        console.error('PATCH /api/recipes failed:', error);
+        try { await db.exec('ROLLBACK'); } catch {}
+
+        return res.status(500).send({
+            data: { errorMessage: 'Could not update recipe' }
+        });
+    }
+});
 
 
 router.delete('/api/recipes/:id', isLoggedIn, async (req, res) => {
