@@ -10,6 +10,7 @@
   import CreateRecipe from './pages/CreateRecipe/CreateRecipe.svelte';
   import Discover from './pages/Discover/Discover.svelte';
   import Recipe from './pages/Recipe/Recipe.svelte';
+  import Profile from './pages/Profile/Profile.svelte';
   
 
   import PrivateRoute from './components/PrivateRoute/PrivateRoute.svelte';
@@ -54,6 +55,7 @@
         <Recipe id={params.id} />
       </PrivateRoute>
     </Route>
+
     
 
   </div> 

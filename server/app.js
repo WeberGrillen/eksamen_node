@@ -7,7 +7,12 @@ import middlewareRouter from './routers/middlewareRouters.js';
 import sessionRouter from  './routers/sessionRouter.js';
 import authRouter from './routers/authRouter.js';
 import recipeRouter from './routers/recipeRouter.js';
+import profileRouter from './routers/userRouter.js';
 import cors from 'cors';
+import http from 'http';
+import { Server } from 'socket.io';
+import likeSocket from './sockets/likeSocket.js';
+import followSocket from './sockets/followSocket.js';
 
 // App setup
 const app = express();
@@ -23,46 +28,73 @@ app.use(express.json({ limit: '10mb' }));
 app.use(helmet());
 app.use(rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 50, 
+	limit: 300, 
 	standardHeaders: 'draft-8', 
 	legacyHeaders: false, 
 	ipv6Subnet: 56,
 }))
 app.use('/auth', rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 100,
+  limit: 20,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   ipv6Subnet: 56,
 }));
-app.use(session({
+
+const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false }
-}));
-
+});
 
 // Routers
+app.use(sessionMiddleware);
 app.use(middlewareRouter);
 app.use(sessionRouter);
 app.use(authRouter);
 app.use(recipeRouter);
+app.use(profileRouter);
 
-
-// 404
-app.get('/{*splat}', (req, res) => {
-    res.send(`<div><h1>404</h1><h3>Page - ${req.path} - doesn't exist</h3></div>`
-    );
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "http://localhost:5173",
+        credentials: true
+    }
 });
 
-app.all('/{*splat}', (req, res)  => {
-    res.send({ errorMessage: `The route for ${req.path} and the HTTP method ${req.method} does not exist` });
+io.engine.use(sessionMiddleware);
+
+likeSocket(io);
+followSocket(io);
+
+io.on("connection", (socket) => {
+    console.log("A new socket connected with id", socket.id);
+    socket.on("disconnect", () => console.log("A socket disconnected", socket.id));
+});
+
+
+
+app.get('/api/{*splat}', (req, res) => {
+    res.status(404).send({
+        data: { errorMessage: `${req.method} ${req.path} does not exist` }
+    });
+});
+
+app.get('/{*splat}', (req, res) => {
+    res.status(404).send(`<div><h1>404</h1><h3>Page - ${req.path} - doesn't exist</h3></div>`);
+});
+
+app.all('/{*splat}', (req, res) => {
+    res.status(404).send({
+        data: { errorMessage: `${req.method} ${req.path} does not exist` }
+    });
 });
 
 
 
 // Database + Server start
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log('Server started on port: ', PORT);
 });
