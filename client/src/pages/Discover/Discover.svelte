@@ -32,7 +32,6 @@
             const result = await fetchGet('/api/recipes');
             recipes = result.data.recipes;
         } catch (error) {
-            console.log(error);
             toast.error(error?.data?.errorMessage ?? 'Could not load recipes');
         }
 
@@ -40,7 +39,6 @@
             const result = await fetchGet('/api/users');
             users = result.data.users;
         } catch (error) {
-            console.log(error);
             toast.error(error?.data?.errorMessage ?? 'Could not load profiles');
         }
 

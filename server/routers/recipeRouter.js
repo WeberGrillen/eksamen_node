@@ -1,13 +1,18 @@
 import { Router } from 'express';
 import db from '../database/connection.js';
 import { isLoggedIn } from '../routers/sessionRouter.js' 
+import { validateRecipe } from '../utils/recipeValidation.js';
 
 const router = Router();
 
-router.get('/api/recipes', async (req, res) => {
+/* ---------- GET ---------- */
+
+// get all recipes
+router.get('/api/recipes', isLoggedIn, async (req, res) => {
     try {
         const result = await db.all(`
-            SELECT r.*, u.name AS author_name
+            SELECT r.*, u.name AS author_name,
+                (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count
             FROM recipes r
             LEFT JOIN users u ON u.id = r.user_id
             ORDER BY r.created_at DESC
@@ -16,15 +21,67 @@ router.get('/api/recipes', async (req, res) => {
             data: { recipes: result}
         });
     } catch (error) {
+        console.error('GET /api/recipes failed:', error);
         res.status(500).send({
             data: { errorMessage: 'Could not fetch recipes' }
         });
     }
 });
 
-router.get('/api/recipes/:id', async (req, res) => {
-    const { id } = req.params;
+// trending recipes
+router.get('/api/recipes/trending', isLoggedIn, async (req, res) => {
+    const currentUserId = req.session.user?.id ?? 0;
 
+    try {
+        const recipes = await db.all(`
+            SELECT r.*, u.name AS author_name,
+                COUNT(l.recipe_id) AS recent_likes,
+                (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count,
+                EXISTS(SELECT 1 FROM recipe_likes
+                    WHERE user_id = ? AND recipe_id = r.id) AS is_liked
+            FROM recipes r
+            LEFT JOIN users u ON u.id = r.user_id
+            JOIN recipe_likes l ON l.recipe_id = r.id
+            WHERE l.created_at >= datetime('now', '-7 days')
+            GROUP BY r.id
+            ORDER BY recent_likes DESC, r.created_at DESC
+            LIMIT 6`,
+            [currentUserId]
+        );
+
+        res.status(200).send({ data: { recipes } });
+    } catch (error) {
+        console.error('GET /api/recipes/trending failed:', error);
+        res.status(500).send({ data: { errorMessage: 'Could not fetch trending recipes' } });
+    }
+});
+
+// saved recipes
+router.get('/api/recipes/saved', isLoggedIn, async (req, res) => {
+
+    try {
+        const recipes = await db.all(`
+            SELECT r.*, u.name AS author_name,
+                   (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count
+            FROM recipes r
+            LEFT JOIN users u ON u.id = r.user_id
+            JOIN recipe_saves s ON s.recipe_id = r.id
+            WHERE s.user_id = ?
+            ORDER BY s.created_at DESC`,
+            [req.session.user.id]
+        );
+
+        res.status(200).send({ data: { recipes } });
+    } catch (error) {
+        console.error('GET /api/recipes/saved failed:', error);
+        res.status(500).send({ data: { errorMessage: 'Could not fetch saved recipes' } });
+    }
+});
+
+// Get recipe by id
+router.get('/api/recipes/:id', isLoggedIn, async (req, res) => {
+
+    const { id } = req.params;
     const currentUserId = req.session.user?.id ?? 0;
 
     try {
@@ -32,11 +89,13 @@ router.get('/api/recipes/:id', async (req, res) => {
             SELECT r.*, u.name AS author_name,
                 (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count,
                 EXISTS(SELECT 1 FROM recipe_likes
-                        WHERE user_id = ? AND recipe_id = r.id) AS is_liked
+                    WHERE user_id = ? AND recipe_id = r.id) AS is_liked,
+                EXISTS(SELECT 1 FROM recipe_saves
+                    WHERE user_id = ? AND recipe_id = r.id) AS is_saved
             FROM recipes r
             LEFT JOIN users u ON u.id = r.user_id
             WHERE r.id = ?`,
-            [currentUserId, id]
+            [currentUserId, currentUserId, id]
         );
 
         if (!recipe) {
@@ -45,28 +104,26 @@ router.get('/api/recipes/:id', async (req, res) => {
             });
         }
 
-        const ingredients = await db.all(`
+        recipe.ingredients = await db.all(`
             SELECT text FROM recipe_ingredients
             WHERE recipe_id = ?
             ORDER BY position`,
             [id]
         );
 
-        const steps = await db.all(`
+        recipe.steps = await db.all(`
             SELECT text, timer_seconds FROM recipe_steps
             WHERE recipe_id = ?
             ORDER BY position`,
             [id]
         );
 
-        recipe.ingredients = ingredients;
-        recipe.steps = steps;
-
         res.status(200).send({
             data: { recipe }
         });
 
     } catch (error) {
+        console.error('GET /api/recipes/:id failed:', error);
         res.status(500).send({
             data: { errorMessage: 'Could not fetch recipe' }
         });
@@ -74,103 +131,35 @@ router.get('/api/recipes/:id', async (req, res) => {
 });
 
 
+/* ---------- POST ---------- */
+
+// create recipes
 router.post('/api/recipes', isLoggedIn, async (req, res) => {
-    const { title, description, imageData, category, totalMinutes, servings, difficulty, ingredients, steps } = req.body;
+    const { errorMessage, clean } = validateRecipe(req.body);
 
-    const cleanIngredients = (Array.isArray(ingredients) ? ingredients : [])
-        .map((text) => String(text ?? '').trim())
-        .filter((text) => text !== '');
-
-    const cleanSteps = (Array.isArray(steps) ? steps : [])
-        .filter((step) => step?.text?.trim())
-        .map((step) => ({ text: step.text.trim(), timerSeconds: step.timerSeconds ?? null }));
-
-    const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Drinks'];
-    const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
-
-    const cleanCategory = category?.trim() || null;
-    const cleanDifficulty = difficulty?.trim() || null;
-
-    if (cleanCategory && !CATEGORIES.includes(cleanCategory)) {
-        return res.status(400).send({
-            data: { errorMessage: "Please choose a valid category" }
-        });
-    }
-
-    if (cleanDifficulty && !DIFFICULTIES.includes(cleanDifficulty)) {
-        return res.status(400).send({
-            data: { errorMessage: "Please choose a valid difficulty" }
-        });
-    }
-
-    if (!title?.trim()) {
-        return res.status(400).send({
-            data: { errorMessage: "Title is required" }
-        });
-    }
-
-    if (cleanIngredients.length === 0) {
-        return res.status(400).send({
-            data: { errorMessage: "At least one ingredient is required" }
-        });
-    }
-
-    if (cleanSteps.length === 0) {
-        return res.status(400).send({
-            data: { errorMessage: "At least one step is required" }
-        });
-    }
-
-    const MAX_IMAGE_CHARS= 2_000_000;
-
-    if (imageData) {
-        if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) {
-            return res.status(400).send({
-                data: { errorMessage: "Invalid image"}  
-            });
-        }
-        if (imageData.length > MAX_IMAGE_CHARS) {
-            return res.status(400).send({
-                data: { errorMessage: "Image is too large"}
-            });
-        }
+    if (errorMessage) {
+        return res.status(400).send({ data: { errorMessage } });
     }
 
     try{
         await db.exec('BEGIN TRANSACTION');
         
-        
-        const recipeResult = await db.run(`
+        const result = await db.run(`
             INSERT INTO recipes (user_id, title, description, image_data, category, total_minutes, servings, difficulty)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [req.session.user.id, title.trim(), description ?? null, imageData ?? null,
-             cleanCategory ?? null, totalMinutes ?? null, servings ?? null, cleanDifficulty ?? null]
+            [req.session.user.id, clean.title, clean.description, clean.imageData,
+             clean.category, clean.totalMinutes, clean.servings, clean.difficulty]
         );
         
-        const recipeId = recipeResult.lastID;
+        const recipeId = result.lastID;
 
-        for (let i = 0; i < cleanIngredients.length; i++) {
-            await db.run(`
-                INSERT INTO recipe_ingredients (recipe_id, position, text)
-                VALUES (?, ?, ?)`,
-                [recipeId, i + 1, cleanIngredients[i]]
-            );
-        }
-
-        for (let i = 0; i < cleanSteps.length; i++) {
-            await db.run(
-                `INSERT INTO recipe_steps (recipe_id, position, text, timer_seconds)
-                 VALUES (?, ?, ?, ?)`,
-                [recipeId, i + 1, cleanSteps[i]?.text, cleanSteps[i].timerSeconds ?? null]
-            );
-        }
+        await insertIngredientsAndSteps(recipeId, clean);
 
         await db.exec('COMMIT');
 
         res.status(201).send({
             data: { successMessage: 'Recipe created', recipeId}
         });
-
     } catch (error) {
         console.error('POST /api/recipes failed:', error);
         try { await db.exec('ROLLBACK'); } catch {}
@@ -181,68 +170,31 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
     }
 });
 
+// Save / unsave
+router.post('/api/recipes/:id/save', isLoggedIn, async (req, res) => {
+    try {
+        await db.run(
+            `INSERT OR IGNORE INTO recipe_saves (user_id, recipe_id) VALUES (?, ?)`,
+            [req.session.user.id, req.params.id]
+        );
+
+        res.status(200).send({ data: { successMessage: 'Saved' } });
+    } catch (error) {
+        console.error('POST /api/recipes/:id/save failed:', error);
+        res.status(500).send({ data: { errorMessage: 'Could not save recipe' } });
+    }
+});
+
+
+/* ---------- PATCH ---------- */
+
+// update recipes
 router.patch('/api/recipes/:id', isLoggedIn, async (req, res) => {
     const recipeId = Number(req.params.id);
-    const { title, description, imageData, category, totalMinutes,
-            servings, difficulty, ingredients, steps } = req.body;
+    const { errorMessage, clean } = validateRecipe(req.body);
 
-    const cleanIngredients = (Array.isArray(ingredients) ? ingredients : [])
-        .map((text) => String(text ?? '').trim())
-        .filter((text) => text !== '');
-
-    const cleanSteps = (Array.isArray(steps) ? steps : [])
-        .filter((step) => step?.text?.trim())
-        .map((step) => ({ text: step.text.trim(), timerSeconds: step.timerSeconds ?? null }));
-
-    const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Drinks'];
-    const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
-
-    const cleanCategory = category?.trim() || null;
-    const cleanDifficulty = difficulty?.trim() || null;
-
-    if (cleanCategory && !CATEGORIES.includes(cleanCategory)) {
-        return res.status(400).send({
-            data: { errorMessage: "Please choose a valid category" }
-        });
-    }
-
-    if (cleanDifficulty && !DIFFICULTIES.includes(cleanDifficulty)) {
-        return res.status(400).send({
-            data: { errorMessage: "Please choose a valid difficulty" }
-        });
-    }
-
-    if (!title?.trim()) {
-        return res.status(400).send({
-            data: { errorMessage: "Title is required" }
-        });
-    }
-
-    if (cleanIngredients.length === 0) {
-        return res.status(400).send({
-            data: { errorMessage: "At least one ingredient is required" }
-        });
-    }
-
-    if (cleanSteps.length === 0) {
-        return res.status(400).send({
-            data: { errorMessage: "At least one step is required" }
-        });
-    }
-
-    const MAX_IMAGE_CHARS = 2_000_000;
-
-    if (imageData) {
-        if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) {
-            return res.status(400).send({
-                data: { errorMessage: "Invalid image" }
-            });
-        }
-        if (imageData.length > MAX_IMAGE_CHARS) {
-            return res.status(400).send({
-                data: { errorMessage: "Image is too large" }
-            });
-        }
+   if (errorMessage) {
+        return res.status(400).send({ data: { errorMessage } });
     }
 
     try {
@@ -272,35 +224,20 @@ router.patch('/api/recipes/:id', isLoggedIn, async (req, res) => {
                 servings = ?,
                 difficulty = ?
             WHERE id = ?`,
-            [title.trim(), description ?? null, imageData ?? null, cleanCategory ?? null,
-             totalMinutes ?? null, servings ?? null, cleanDifficulty ?? null, recipeId]
+            [clean.title, clean.description, clean.imageData, clean.category,
+             clean.totalMinutes, clean.servings, clean.difficulty, recipeId]
         );
 
         await db.run(`DELETE FROM recipe_ingredients WHERE recipe_id = ?`, [recipeId]);
         await db.run(`DELETE FROM recipe_steps WHERE recipe_id = ?`, [recipeId]);
 
-        for (let i = 0; i < cleanIngredients.length; i++) {
-            await db.run(`
-                INSERT INTO recipe_ingredients (recipe_id, position, text)
-                VALUES (?, ?, ?)`,
-                [recipeId, i + 1, cleanIngredients[i]]
-            );
-        }
-
-        for (let i = 0; i < cleanSteps.length; i++) {
-            await db.run(`
-                INSERT INTO recipe_steps (recipe_id, position, text, timer_seconds)
-                VALUES (?, ?, ?, ?)`,
-                [recipeId, i + 1, cleanSteps[i].text, cleanSteps[i].timerSeconds]
-            );
-        }
+        await insertIngredientsAndSteps(recipeId, clean);
 
         await db.exec('COMMIT');
 
         res.status(200).send({
             data: { successMessage: 'Recipe updated' }
         });
-
     } catch (error) {
         console.error('PATCH /api/recipes failed:', error);
         try { await db.exec('ROLLBACK'); } catch {}
@@ -311,7 +248,9 @@ router.patch('/api/recipes/:id', isLoggedIn, async (req, res) => {
     }
 });
 
+/* ---------- DELETE ---------- */
 
+// delete recipes
 router.delete('/api/recipes/:id', isLoggedIn, async (req, res) => {
     const { id } = req.params;
 
@@ -336,12 +275,48 @@ router.delete('/api/recipes/:id', isLoggedIn, async (req, res) => {
             data: { successMessage: 'Recipe deleted' }
         });
     } catch (error) {
-        console.log(error);
+        console.error('DELETE /api/recipes/:id failed:', error);
         res.status(500).send({
             data: { errorMessage: 'Could not delete recipe' }
         });
     }
 });
 
+// unsave recipe
+router.delete('/api/recipes/:id/save', isLoggedIn, async (req, res) => {
+    try {
+        await db.run(
+            `DELETE FROM recipe_saves WHERE user_id = ? AND recipe_id = ?`,
+            [req.session.user.id, req.params.id]
+        );
+
+        res.status(200).send({ data: { successMessage: 'Removed' } });
+    } catch (error) {
+        console.error('DELETE /api/recipes/:id/save failed:', error);
+        res.status(500).send({ data: { errorMessage: 'Could not remove recipe' } });
+    }
+});
+
+
+/* ---------- Helpers ---------- */
+
+// Shared by POST and PATCH — must run inside an open transaction
+async function insertIngredientsAndSteps(recipeId, clean) {
+    for (let i = 0; i < clean.ingredients.length; i++) {
+        await db.run(`
+            INSERT INTO recipe_ingredients (recipe_id, position, text)
+            VALUES (?, ?, ?)`,
+            [recipeId, i + 1, clean.ingredients[i]]
+        );
+    }
+
+    for (let i = 0; i < clean.steps.length; i++) {
+        await db.run(`
+            INSERT INTO recipe_steps (recipe_id, position, text, timer_seconds)
+            VALUES (?, ?, ?, ?)`,
+            [recipeId, i + 1, clean.steps[i].text, clean.steps[i].timerSeconds]
+        );
+    }
+}
 
 export default router;

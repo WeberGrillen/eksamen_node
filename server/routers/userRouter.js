@@ -4,9 +4,10 @@ import db from '../database/connection.js';
 
 const router = Router();
 
+// get all users
 router.get('/api/users', isLoggedIn, async (req, res) => {
 
-    const currentUserId = req.session.user?.id ?? 0;
+    const currentUserId = req.session.user.id;
 
     try {
         const users = await db.all(`
@@ -20,19 +21,19 @@ router.get('/api/users', isLoggedIn, async (req, res) => {
             ORDER BY follower_count DESC`,
             [currentUserId, currentUserId]
         );
-
         res.status(200).send({ data: { users } });
     } catch (error) {
-        console.log(error);
+        console.error('GET /api/users failed:', error);
         res.status(500).send({ data: { errorMessage: 'Could not fetch users' } });
     }
 });
 
+// get user by id
 router.get('/api/users/:id/profile', isLoggedIn, async (req, res) => {
 
     const { id } = req.params;
-    const currentUserId = req.session.user?.id ?? 0;
-    
+    const currentUserId = req.session.user.id;
+
     try {
         const profile = await db.get(`
             SELECT u.id, u.name, u.bio, u.avatar_data, u.banner_data,
@@ -79,34 +80,14 @@ router.get('/api/users/:id/profile', isLoggedIn, async (req, res) => {
             data: { profile, recipes, saved, liked, counts }
         });
     } catch (error) {
-        console.log(error);
+        console.error('GET /api/users/:id/profile failed:', error);
         res.status(500).send({
             data: { errorMessage: 'Could not fetch profile' }
         });
     }
 });
 
-router.post('/api/users/:id/follow', isLoggedIn, async (req, res) => {
-    const followedId = Number(req.params.id);
-    const followerId = req.session.user.id;
-
-    if (followedId === followerId) {
-        return res.status(400).send({ data: { errorMessage: 'You cannot follow yourself' } });
-    }
-
-    try {
-        await db.run(
-            `INSERT OR IGNORE INTO follows (follower_id, followed_id) VALUES (?, ?)`,
-            [followerId, followedId]
-        );
-        res.status(200).send({ data: { successMessage: 'Following' } });
-    } catch (error) {
-        console.log(error);
-        res.status(500).send({ data: { errorMessage: 'Could not follow user' } });
-    }
-});
-
-
+// edit user
 router.patch('/api/users/me', isLoggedIn, async (req, res) => {
     const { bio, avatarData, bannerData } = req.body;
 
@@ -135,21 +116,8 @@ router.patch('/api/users/me', isLoggedIn, async (req, res) => {
 
         res.status(200).send({ data: { successMessage: 'Profile updated' } });
     } catch (error) {
-        console.log(error);
+        console.error('PATCH /api/users/me failed:', error);
         res.status(500).send({ data: { errorMessage: 'Could not update profile' } });
-    }
-});
-
-router.delete('/api/users/:id/follow', isLoggedIn, async (req, res) => {
-    try {
-        await db.run(
-            `DELETE FROM follows WHERE follower_id = ? AND followed_id = ?`,
-            [req.session.user.id, req.params.id]
-        );
-        res.status(200).send({ data: { successMessage: 'Unfollowed' } });
-    } catch (error) {
-        console.log(error);
-        res.status(500).send({ data: { errorMessage: 'Could not unfollow user' } });
     }
 });
 

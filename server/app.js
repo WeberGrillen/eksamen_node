@@ -24,6 +24,13 @@ app.use(cors({
 }));
 
 // Express middleware 
+const sessionMiddleware = session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false }
+});
+app.use(sessionMiddleware);
 app.use(express.json({ limit: '10mb' }));
 app.use(helmet());
 app.use(rateLimit({
@@ -33,23 +40,19 @@ app.use(rateLimit({
 	legacyHeaders: false, 
 	ipv6Subnet: 56,
 }))
-app.use('/auth', rateLimit({
+app.use('/api/auth', rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
+  skip: (req) => req.path === '/me',
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   ipv6Subnet: 56,
 }));
 
-const sessionMiddleware = session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false }
-});
+
+
 
 // Routers
-app.use(sessionMiddleware);
 app.use(middlewareRouter);
 app.use(sessionRouter);
 app.use(authRouter);
@@ -68,12 +71,6 @@ io.engine.use(sessionMiddleware);
 
 likeSocket(io);
 followSocket(io);
-
-io.on("connection", (socket) => {
-    console.log("A new socket connected with id", socket.id);
-    socket.on("disconnect", () => console.log("A socket disconnected", socket.id));
-});
-
 
 
 app.get('/api/{*splat}', (req, res) => {

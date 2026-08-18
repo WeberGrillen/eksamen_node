@@ -110,7 +110,9 @@ router.post('/api/auth/login', async (req, res) => {
 router.post('/api/auth/logout', (req, res) => {
     req.session.destroy((error) => {
         if (error) {
-            return res.status(500).send({ error: 'Could not log out'});
+            return res.status(500).send({
+                data: { errorMessage: 'Could not log out'}
+            });
         }
         res.send({ data: 
             { successMessage: 'Logged out successfully' }
