@@ -2,12 +2,14 @@
     import { onMount, onDestroy } from 'svelte';
     import { navigate } from 'svelte-routing';
     import { toast } from 'svelte-sonner';
-    import { fetchGet } from '../../util/fetchUtil';
+    import { fetchDelete, fetchGet, fetchPost } from '../../util/fetchUtil';
     import { BASE_URL } from '../../stores/generalStore';
     import io from 'socket.io-client';
     import CookingMode from '../../components/CookingMode/CookingMode.svelte';
     import heartIcon from '../../assets/heart.svg?raw';
     import heartFilledIcon from '../../assets/heart-fill.svg?raw';
+    import bookmarkIcon from '../../assets/bookmark.svg?raw';
+    import bookmarkFilledIcon from '../../assets/bookmark-fill.svg?raw';
 
     export let id;
 
@@ -20,12 +22,31 @@
     let likeCount = 0;
     let liked = false;
 
+    let saved = false;
+
+    async function toggleSaved() {
+        const wasSaved = saved;
+        saved = !wasSaved;
+
+        try {
+            if (wasSaved) {
+                await fetchDelete(`/api/recipes/${id}/save`);
+            } else {
+                await fetchPost(`/api/recipes/${id}/save`);
+            }
+        } catch (error) {
+            saved = wasSaved;
+            toast.error(error?.data?.errorMessage ?? 'Could not update');
+        }
+    }
+
     onMount(async () => {
         try {
             const result = await fetchGet(`/api/recipes/${id}`);
             recipe = result.data.recipe;
             likeCount = recipe.like_count;
             liked = !!recipe.is_liked;
+            saved = !!recipe.is_saved;
         } catch (error) {
             toast.error(error?.data?.errorMessage ?? 'Could not load recipe');
         } finally {
@@ -78,11 +99,16 @@
             <div class="recipe-header-top">
                 <h1>{recipe.title}</h1>
                 <div class="recipe-header-actions">
-                    <button class="like-btn" class:liked on:click={toggleLike}>
-                        <span class="heart">
-                            {@html liked ? heartFilledIcon : heartIcon}</span>
-                        {likeCount}
+                    <button class="action-btn" class:active={liked} on:click={toggleLike}>
+                    {@html liked ? heartFilledIcon : heartIcon}
+                    <span class="action-label action-count">{likeCount}</span>
+                </button>
+
+                    <button class="action-btn" class:active={saved} on:click={toggleSaved}>
+                        {@html saved ? bookmarkFilledIcon : bookmarkIcon}
+                        <span class="action-label">{saved ? 'Saved' : 'Save'}</span>
                     </button>
+
                     <button class="cook-btn" on:click={() => cooking = true}>▶ Start Cooking</button>
                 </div>
             </div>

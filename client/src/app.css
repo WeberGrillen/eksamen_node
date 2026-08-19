@@ -1316,9 +1316,58 @@ main.recipe-page {
 .recipe-header-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
   flex-shrink: 0;
 }
+
+.recipe-header-actions .cook-btn {
+  margin-left: 0.5rem;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  color: var(--color-secondary-text);
+  font-family: inherit;
+  font-size: 1.0625rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  gap: 0.5rem;
+}
+
+.action-btn:hover {
+  color: var(--color-accent);
+}
+
+.action-btn.active {
+  color: var(--color-accent);
+}
+
+.action-btn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  transform-origin: center;
+}
+
+.action-btn.active svg {
+  animation: heart-pop 0.3s ease;
+}
+
+.action-label {
+  min-width: 3.2rem;
+  text-align: left;
+}
+
+.action-count {
+  min-width: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+
 
 .like-btn {
   display: flex;
@@ -1399,4 +1448,17 @@ main.recipe-page {
 
 .profile-header-text {
   min-width: 0;
+}
+
+.saved-page {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 2.5rem 4rem 5rem;
+}
+
+.saved-title {
+  margin: 0 0 2rem;
+  font-family: 'Instrument Serif', serif;
+  font-size: 2.75rem;
+  font-weight: 400;
 }

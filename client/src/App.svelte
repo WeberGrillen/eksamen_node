@@ -7,13 +7,13 @@
   import Register from './pages/Register/Register.svelte';
   import Landing from './pages/Landing/Landing.svelte';
   import Home from './pages/Home/Home.svelte';
-  import CreateRecipe from './pages/CreateRecipe/CreateRecipe.svelte';
-  import EditRecipe from './pages/EditRecipe/EditRecipe.svelte';
+  import CreateRecipe from './pages/CreateRecipes/CreateRecipes.svelte';
+  import EditRecipe from './pages/EditRecipes/EditRecipes.svelte';
   import Discover from './pages/Discover/Discover.svelte';
   import Recipe from './pages/Recipe/Recipe.svelte';
   import Profile from './pages/Profile/Profile.svelte';
+  import SavedRecipes from './pages/Saved/SavedRecipes.svelte';
   
-
   import PrivateRoute from './components/PrivateRoute/PrivateRoute.svelte';
   
 </script>
@@ -69,6 +69,11 @@
       </PrivateRoute>
     </Route>
 
+    <Route path='/saved'>
+      <PrivateRoute>
+        <SavedRecipes />
+      </PrivateRoute>
+    </Route>
     
 
     
