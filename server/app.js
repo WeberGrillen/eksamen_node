@@ -13,6 +13,8 @@ import http from 'http';
 import { Server } from 'socket.io';
 import likeSocket from './sockets/likeSocket.js';
 import followSocket from './sockets/followSocket.js';
+import commentSocket from './sockets/commentSocket.js';
+
 
 // App setup
 const app = express();
@@ -71,7 +73,7 @@ io.engine.use(sessionMiddleware);
 
 likeSocket(io);
 followSocket(io);
-
+commentSocket(io);
 
 app.get('/api/{*splat}', (req, res) => {
     res.status(404).send({

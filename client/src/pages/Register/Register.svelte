@@ -1,47 +1,44 @@
 <script>
-    import { navigate } from 'svelte-routing';
+    import { navigate, Link } from 'svelte-routing';
     import { fetchPost } from '../../util/fetchUtil.js';
     import { toast } from 'svelte-sonner';
-
-    export let mode = 'register';
+    import { isValidEmail } from '../../util/validationUtil.js';
 
     let name = '';
     let email = '';
     let password = '';
 
     let confirmPassword = '';
-    let showPassword = false;
 
     let emailTouched = false;
     let emailValid = false;
 
     function validateEmail() {
         emailTouched = true;
-        emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    };
+        emailValid = isValidEmail(email);
+    }
 
     async function handleRegister() {
-
         try {
-        const result = await fetchPost('/api/auth/register', {
-            name,
-            email,
-            password,
-            confirmPassword
-        });
+            const result = await fetchPost('/api/auth/register', {
+                name,
+                email,
+                password,
+                confirmPassword
+            });
 
-        toast.success(result.data.successMessage);
-        navigate('/login');
+            toast.success(result.data.successMessage);
+            navigate('/login');
 
         } catch (error) {
-            toast.error(error.data.errorMessage);
+            toast.error(error?.data?.errorMessage);
         }
     }
 </script>
 
 <main class="auth-page">
     <div class="auth-container">
-         <aside class="auth-sidebar" class:register={mode === 'register'}>
+         <aside class="auth-sidebar register">
             <div class="auth-sidebar-content">
                 <h2 class="auth-sidebar-lable">WELCOME TO FOODIE</h2>
                 <h1 class="auth-sidebar-title">Your kitchen, on the internet.</h1>
@@ -74,7 +71,7 @@
 
                 <button type="submit" class="auth-btn">Sign up</button>
         </form>
-        <p class="auth-footer">Already have an account? <a href="/login">Sign in</a></p>
+        <p class="auth-footer">Already have an account? <Link to="/login">Sign in</Link></p>
     </section>
     </div>
     

@@ -5,18 +5,37 @@ import { validateRecipe } from '../utils/recipeValidation.js';
 
 const router = Router();
 
+
+
 /* ---------- GET ---------- */
 
 // get all recipes
 router.get('/api/recipes', isLoggedIn, async (req, res) => {
+    const currentUserId = req.session.user?.id ?? 0;
+    
     try {
         const result = await db.all(`
-            SELECT r.*, u.name AS author_name,
-                (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count
-            FROM recipes r
-            LEFT JOIN users u ON u.id = r.user_id
-            ORDER BY r.created_at DESC
-        `);
+            SELECT recipes.*, users.name AS author_name,
+                (SELECT COUNT(*)
+                FROM recipe_likes
+                WHERE recipe_id = recipes.id) AS like_count,
+                    EXISTS(
+                        SELECT 1
+                        FROM recipe_likes
+                        WHERE user_id = ?
+                        AND recipe_id = recipes.id
+                    ) AS is_liked,
+                    EXISTS(
+                        SELECT 1
+                        FROM recipe_saves
+                        WHERE user_id = ?
+                        AND recipe_id = recipes.id
+                    ) AS is_saved
+            FROM recipes
+            LEFT JOIN users ON users.id = recipes.user_id
+            ORDER BY recipes.created_at DESC
+        `, [currentUserId, currentUserId]
+    );
         res.status(200).send({
             data: { recipes: result}
         });
@@ -34,25 +53,79 @@ router.get('/api/recipes/trending', isLoggedIn, async (req, res) => {
 
     try {
         const recipes = await db.all(`
-            SELECT r.*, u.name AS author_name,
-                COUNT(l.recipe_id) AS recent_likes,
-                (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count,
-                EXISTS(SELECT 1 FROM recipe_likes
-                    WHERE user_id = ? AND recipe_id = r.id) AS is_liked
-            FROM recipes r
-            LEFT JOIN users u ON u.id = r.user_id
-            JOIN recipe_likes l ON l.recipe_id = r.id
-            WHERE l.created_at >= datetime('now', '-7 days')
-            GROUP BY r.id
-            ORDER BY recent_likes DESC, r.created_at DESC
-            LIMIT 6`,
-            [currentUserId]
-        );
-
-        res.status(200).send({ data: { recipes } });
+            SELECT recipes.*, users.name AS author_name,
+                COUNT(recipe_likes.recipe_id) AS recent_likes,
+                (SELECT COUNT(*)
+                FROM recipe_likes
+                WHERE recipe_id = recipes.id) AS like_count,
+                    EXISTS(
+                        SELECT 1
+                        FROM recipe_likes
+                        WHERE user_id = ?
+                        AND recipe_id = recipes.id
+                    ) AS is_liked
+            FROM recipes
+            LEFT JOIN users ON users.id = recipes.user_id
+            JOIN recipe_likes ON recipe_likes.recipe_id = recipes.id
+            WHERE recipe_likes.created_at >= datetime('now', 'start of day')
+            GROUP BY recipes.id
+            ORDER BY recent_likes DESC, recipes.created_at DESC
+            LIMIT 4
+        `, [currentUserId]
+    );
+        res.status(200).send({
+            data: { recipes }
+        });
     } catch (error) {
         console.error('GET /api/recipes/trending failed:', error);
-        res.status(500).send({ data: { errorMessage: 'Could not fetch trending recipes' } });
+        res.status(500).send({
+            data: {
+                errorMessage: 'Could not fetch trending recipes'
+            }
+        });
+    }
+});
+
+// recipes from followed users
+router.get('/api/recipes/following', isLoggedIn, async (req, res) => {
+    const currentUserId = req.session.user?.id ?? 0;
+
+    try {
+        const recipes = await db.all(`
+            SELECT recipes.*, users.name AS author_name,
+                (SELECT COUNT(*)
+                FROM recipe_likes
+                WHERE recipe_id = recipes.id) AS like_count,
+                    EXISTS(
+                        SELECT 1
+                        FROM recipe_likes
+                        WHERE user_id = ?
+                        AND recipe_id = recipes.id
+                    ) AS is_liked,
+                    EXISTS(
+                        SELECT 1
+                        FROM recipe_saves
+                        WHERE user_id = ?
+                        AND recipe_id = recipes.id
+                    ) AS is_saved
+            FROM recipes
+            LEFT JOIN users ON users.id = recipes.user_id
+            JOIN follows ON follows.followed_id = recipes.user_id
+            WHERE follows.follower_id = ?
+            ORDER BY recipes.created_at DESC
+        `, [currentUserId, currentUserId, currentUserId]
+    );
+        res.status(200).send({
+            data: { recipes }
+        });
+
+    } catch (error) {
+        console.error('GET /api/recipes/following failed:', error);
+        res.status(500).send({
+            data: {
+                errorMessage: 'Could not fetch following recipes'
+            }
+        });
     }
 });
 
@@ -61,17 +134,20 @@ router.get('/api/recipes/saved', isLoggedIn, async (req, res) => {
 
     try {
         const recipes = await db.all(`
-            SELECT r.*, u.name AS author_name,
-                   (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count
-            FROM recipes r
-            LEFT JOIN users u ON u.id = r.user_id
-            JOIN recipe_saves s ON s.recipe_id = r.id
-            WHERE s.user_id = ?
-            ORDER BY s.created_at DESC`,
+            SELECT recipes.*, users.name AS author_name,
+                (SELECT COUNT(*)
+                FROM recipe_likes
+                WHERE recipe_id = recipes.id) AS like_count
+            FROM recipes
+            LEFT JOIN users ON users.id = recipes.user_id
+            JOIN recipe_saves ON recipe_saves.recipe_id = recipes.id
+            WHERE recipe_saves.user_id = ?
+            ORDER BY recipe_saves.created_at DESC`,
             [req.session.user.id]
         );
-
-        res.status(200).send({ data: { recipes } });
+        res.status(200).send({
+            data: { recipes }
+        });
     } catch (error) {
         console.error('GET /api/recipes/saved failed:', error);
         res.status(500).send({ data: { errorMessage: 'Could not fetch saved recipes' } });
@@ -86,16 +162,24 @@ router.get('/api/recipes/:id', isLoggedIn, async (req, res) => {
 
     try {
         const recipe = await db.get(`
-            SELECT r.*, u.name AS author_name,
-                (SELECT COUNT(*) FROM recipe_likes WHERE recipe_id = r.id) AS like_count,
-                EXISTS(SELECT 1 FROM recipe_likes
-                    WHERE user_id = ? AND recipe_id = r.id) AS is_liked,
-                EXISTS(SELECT 1 FROM recipe_saves
-                    WHERE user_id = ? AND recipe_id = r.id) AS is_saved
-            FROM recipes r
-            LEFT JOIN users u ON u.id = r.user_id
-            WHERE r.id = ?`,
-            [currentUserId, currentUserId, id]
+            SELECT recipes.*, users.name AS author_name, users.avatar_data AS author_avatar,
+                (SELECT COUNT(*)
+                FROM recipe_likes
+                WHERE recipe_id = recipes.id) AS like_count,
+                    EXISTS(
+                        SELECT 1 FROM recipe_likes
+                        WHERE user_id = ? AND recipe_id = recipes.id) AS is_liked,
+                    EXISTS(
+                        SELECT 1 FROM recipe_saves
+                        WHERE user_id = ? AND recipe_id = recipes.id) AS is_saved,
+                    EXISTS(
+                        SELECT 1
+                        FROM follows
+                        WHERE follower_id = ? AND followed_id = recipes.user_id) AS is_following
+            FROM recipes
+            LEFT JOIN users ON users.id = recipes.user_id
+            WHERE recipes.id = ?`,
+            [currentUserId, currentUserId, currentUserId, id]
         );
 
         if (!recipe) {
@@ -118,10 +202,22 @@ router.get('/api/recipes/:id', isLoggedIn, async (req, res) => {
             [id]
         );
 
+        recipe.comments = await db.all(`
+            SELECT recipe_comments.id,
+                recipe_comments.text,
+                recipe_comments.created_at,
+                recipe_comments.user_id,
+                users.name AS author_name,
+                users.avatar_data AS author_avatar
+            FROM recipe_comments
+            LEFT JOIN users ON users.id = recipe_comments.user_id
+            WHERE recipe_comments.recipe_id = ?
+            ORDER BY recipe_comments.created_at ASC`,
+            [id]
+        );
         res.status(200).send({
             data: { recipe }
         });
-
     } catch (error) {
         console.error('GET /api/recipes/:id failed:', error);
         res.status(500).send({
@@ -152,7 +248,6 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
         );
         
         const recipeId = result.lastID;
-
         await insertIngredientsAndSteps(recipeId, clean);
 
         await db.exec('COMMIT');
@@ -162,8 +257,9 @@ router.post('/api/recipes', isLoggedIn, async (req, res) => {
         });
     } catch (error) {
         console.error('POST /api/recipes failed:', error);
-        try { await db.exec('ROLLBACK'); } catch {}
-       
+        try {
+            await db.exec('ROLLBACK');
+        } catch {}
         return res.status(500).send({
             data: { errorMessage: 'Could not create recipe' }
         });
@@ -262,7 +358,6 @@ router.delete('/api/recipes/:id', isLoggedIn, async (req, res) => {
                 data: { errorMessage: 'Recipe not found' }
             });
         }
-
         if (recipe.user_id !== req.session.user.id) {
             return res.status(403).send({
                 data: { errorMessage: 'You can only delete your own recipes' }

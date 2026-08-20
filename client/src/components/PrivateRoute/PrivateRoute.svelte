@@ -9,12 +9,12 @@
     onMount(async () => {
         await checkAuth();
 
+        loading = false;
+
         if (!get(user)) {
             navigate('/login');
-            return
+            return;
         }
-
-        loading = false;
     });
 </script>
 

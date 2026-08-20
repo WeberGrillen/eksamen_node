@@ -1,5 +1,5 @@
 <script>
-  import { Router, Link, Route } from 'svelte-routing';
+  import { Router, Route } from 'svelte-routing';
   import { Toaster } from 'svelte-sonner';
 
   import Sidebar from './components/Sidebar/Sidebar.svelte';
@@ -19,11 +19,15 @@
 </script>
 
 <Toaster/>
+
 <Router>
   <div class="app-layout">
     <Sidebar />
+    
     <div class="main-content" >
-    <Route path='/'><Landing /></Route>
+    <Route path='/'>
+      <Landing />
+    </Route>
     <Route path='/login'><Login /></Route>
     <Route path='/register'><Register /></Route>
 

@@ -4,17 +4,24 @@
     import { fetchGet, fetchPatch, fetchDelete } from '../../util/fetchUtil';
     import { user } from '../../stores/userStore';
     import { BASE_URL } from '../../stores/generalStore';
+    import { resizeImage } from '../../util/imageUtil';
     import io from 'socket.io-client';
     import RecipeCard from '../../components/RecipeCard/RecipeCard.svelte';
 
     export let id = null;
 
     let socket;
+
     let profile = null;
     let recipes = [];
     let saved = [];
     let liked = [];
-    let counts = { followers: 0, following: 0 };
+
+    let counts = {
+        followers: 0,
+        following: 0
+    };
+
     let loading = true;
 
     let activeTab = 'recipes';
@@ -29,60 +36,85 @@
     ];
 
     $: profileId = id ?? $user?.id;
-    $: isOwnProfile = profile && $user && Number(profile.id) == Number($user.id);
 
-    $: visible = activeTab === 'recipes' ? recipes : activeTab === 'saved' ? saved : liked;
+    $: isOwnProfile = Boolean(
+        profile &&
+        $user &&
+        Number(profile.id) === Number($user.id)
+    );
+
+    $: visible =
+        activeTab === 'recipes'
+            ? recipes
+            : activeTab === 'saved'
+            ? saved
+            : liked;
     
 
-    let lastLoadedId = null;
-
-    $: if (profileId && profileId !== lastLoadedId) {
-        lastLoadedId = profileId;
-        loading = true;
-        load();
-    }
-
     async function load() {
+        if (!profileId) return;
+
         try {
             const result = await fetchGet(`/api/users/${profileId}/profile`);
+
             profile = result.data.profile;
             recipes = result.data.recipes;
             saved = result.data.saved;
             liked = result.data.liked;
             counts = result.data.counts;
+
             following = !!profile.is_following;
+
         } catch (error) {
-            toast.error(error?.data?.errorMessage ?? 'Could not load profile');
+            profile = null;
+            toast.error(error?.data?.errorMessage);
+
         } finally {
             loading = false;
         }
     }
 
-    onMount(() => {
-        socket = io($BASE_URL, { withCredentials: true });
+    onMount(async () => {
+        await load();
+
+        socket = io($BASE_URL, {
+            withCredentials: true
+        });
 
         socket.on('server-sends-follower-count', (data) => {
-            if (Number(data.userId) === Number(profileId)) counts.followers = data.count;
+            if (Number(data.userId) === Number(profileId)) {
+                counts.followers = data.count;
+            }
         });
 
         socket.on('server-sends-follow-state', (data) => {
-            if (Number(data.userId) === Number(profileId)) following = data.following;
+            if (Number(data.userId) === Number(profileId)) {
+                following = data.following;
+            }
         });
     });
 
-    onDestroy(() => socket?.disconnect());
+    onDestroy(() => {
+        socket?.disconnect();
+    });
 
     function toggleFollow() {
         socket?.emit('client-toggles-follow', { userId: Number(profileId) });
     }
 
-    function pickImage(event, field) {
+    async function pickImage(event, field) {
         const file = event.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = () => save({ [field]: reader.result });
-        reader.readAsDataURL(file);
+        try {
+            const imageData = await resizeImage(file);
+
+            await save({
+                [field]: imageData
+            });
+        } catch (error) {
+            toast.error(error.message);
+        }
     }
 
     function startEditBio() {
@@ -100,21 +132,27 @@
             await fetchPatch('/api/users/me', body);
             await load();
         } catch (error) {
-            toast.error(error?.data?.errorMessage ?? 'Could not update profile');
+            toast.error(error?.data?.errorMessage);
         }
     }
 
     async function handleDelete(event) {
-        const recipeId = event.detail;
+        const recipeId = Number(event.detail);
 
         try {
             await fetchDelete(`/api/recipes/${recipeId}`);
-            recipes = recipes.filter((r) => r.id !== recipeId);
-            saved = saved.filter((r) => r.id !== recipeId);
-            liked = liked.filter((r) => r.id !== recipeId);
+            recipes = recipes.filter(
+                (recipe) => Number(recipe.id) !== recipeId
+            );
+            saved = saved.filter(
+                (recipe) => Number(recipe.id) !== recipeId
+            );
+            liked = liked.filter(
+                (recipe) => Number(recipe.id) !== recipeId
+            );
             toast.success('Recipe deleted');
         } catch (error) {
-            toast.error(error?.data?.errorMessage ?? 'Could not delete recipe');
+            toast.error(error?.data?.errorMessage);
         }
     }
 </script>

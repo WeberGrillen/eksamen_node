@@ -1,5 +1,6 @@
 <script>
     import { onDestroy, createEventDispatcher } from "svelte";
+    import { formatTime } from '../../util/timeUtil.js';
 
     export let recipe;
 
@@ -11,7 +12,9 @@
     let interval = null;
 
     $: step = recipe.steps[index];
-    $: index, resetTimer();
+    $: if (index >= 0) {
+        resetTimer();
+    }
 
     function resetTimer() {
         stop();
@@ -34,17 +37,25 @@
 
         running = true;
         interval = setInterval(() => {
-            remaining -= 1;
-            if (remaining <= 0) stop();            
-        }, 1000)
+        remaining -= 1;
+
+        if (remaining <= 0) {
+            remaining = 0;
+            stop();
+        }
+    }, 1000);
     }
 
     function next() {
-        if (index < recipe.steps.length -1) index += 1;
+        if (index < recipe.steps.length -1) {
+            index += 1;
+        }
     }
 
     function back() {
-        if (index > 0) index -= 1;
+        if (index > 0) {
+            index -= 1;
+        } 
     }
 
     function close() {
@@ -62,11 +73,6 @@
         }
     }
 
-    function formatTime(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m}:${String(s).padStart(2, '0')}`;
-    }
 
     onDestroy(stop);
 </script>

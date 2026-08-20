@@ -4,6 +4,7 @@
     import { toast } from 'svelte-sonner';
     import { fetchGet } from '../../util/fetchUtil';
     import { BASE_URL } from '../../stores/generalStore';
+    import { CATEGORY_FILTERS } from '../../util/categoryUtil';
     import io from 'socket.io-client';
     import searchIcon from '../../assets/search.svg?raw';
     import RecipeCard from '../../components/RecipeCard/RecipeCard.svelte';
@@ -16,16 +17,21 @@
     let activeTag = 'All';
     let loading = true;
 
-    const tags = ['All', 'Breakfast', 'Lunch', 'Dinner', 'Dessert', 'Snack', 'Drinks'];
+    $: searchQuery = query.trim().toLowerCase();
 
-    $: filteredRecipe = recipes.filter((r) =>
-        (activeTag === 'All' || r.category?.toLowerCase() === activeTag.toLowerCase()) &&
-        r.title.toLowerCase().includes(query.toLowerCase())
+    $: filteredRecipe = recipes.filter((recipe) =>
+        (
+            activeTag === 'All' ||
+            recipe.category?.toLowerCase() === activeTag.toLowerCase()
+        ) &&
+        recipe.title.toLowerCase().includes(searchQuery)
     );
 
-    $: filteredUsers = query.trim() === ''
+    $: filteredUsers = searchQuery === ''
         ? []
-        : users.filter((u) => u.name.toLowerCase().includes(query.toLowerCase()));
+        : users.filter((person) =>
+            person.name.toLowerCase().includes(searchQuery)
+        );
 
     onMount(async () => {
         try {
@@ -50,13 +56,17 @@
 
         socket.on("server-sends-follower-count", (data) => {
             users = users.map((u) =>
-                u.id === Number(data.userId) ? { ...u, follower_count: data.count } : u
+                Number(u.id) === Number(data.userId)
+                ? { ...u, follower_count: data.count }
+                : u
             );
         });
 
         socket.on("server-sends-follow-state", (data) => {
             users = users.map((u) =>
-                u.id === Number(data.userId) ? { ...u, is_following: data.following } : u
+                Number(u.id) === Number(data.userId)
+                ? { ...u, is_following: data.following }
+                : u
             );
         });
     });
@@ -65,7 +75,9 @@
 
     function toggleFollow(event, person) {
         event.stopPropagation();
-        socket?.emit("client-toggles-follow", { userId: person.id });
+        socket?.emit("client-toggles-follow", {
+            userId: Number(person.id)
+        });
     }
 
 </script>
@@ -79,7 +91,7 @@
     </div>
 
     <div class="discover-tags">
-        {#each tags as tag}
+        {#each CATEGORY_FILTERS as tag}
             <button
                 class="discover-tags-btn"
                 class:active={activeTag === tag}

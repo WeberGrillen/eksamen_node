@@ -1,12 +1,9 @@
 <script>
-    import { navigate } from 'svelte-routing';
+    import { navigate, Link } from 'svelte-routing';
     import { checkAuth } from '../../stores/userStore.js';
     import { fetchPost } from '../../util/fetchUtil.js';
     import { toast } from 'svelte-sonner';
-
-    export let mode = 'login';
-
-    $: isRegister = mode === 'register';
+    import { isValidEmail } from '../../util/validationUtil.js';
 
     let email = '';
     let password = '';
@@ -16,8 +13,8 @@
 
     function validateEmail() {
         emailTouched = true;
-        emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    };
+        emailValid = isValidEmail(email);
+    }
 
     async function handleLogin() {
 
@@ -30,7 +27,7 @@
         toast.success(result.data.successMessage);
         navigate('/home');
         } catch (error) {
-            toast.error(error.data.errorMessage);
+            toast.error(error?.data?.errorMessage ?? 'Could not sign in');
         }   
     }
 
@@ -63,7 +60,7 @@
             </div>
             <button type="submit" class="auth-btn">Sign in</button>
         </form>
-        <p class="auth-footer">Don't have an account? <a href="/register">Sign up</a></p>
+        <p class="auth-footer">Don't have an account? <Link to="/register">Sign up</Link></p>
     </section>
     </div>
     

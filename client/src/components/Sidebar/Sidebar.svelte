@@ -1,20 +1,20 @@
 <script>
+    import { Link, navigate } from "svelte-routing";
+    import { toast } from "svelte-sonner";
+    import { fetchPost } from "../../util/fetchUtil";
+    import { user } from "../../stores/userStore";
+
     import homeIcon from '../../assets/home.svg?raw';
     import DiscoverIcon from '../../assets/compass.svg?raw';
     import savedIcon from '../../assets/bookmark.svg?raw';
     import profileIcon from '../../assets/user.svg?raw';
     import plusIcon from '../../assets/plus.svg?raw';
-    import xIcon from '../../assets/x.svg?raw';
 
-    import { Link, navigate, link } from "svelte-routing";
-    import { toast } from "svelte-sonner";
-    import { fetchPost } from "../../util/fetchUtil";
-    import { user } from "../../stores/userStore";
+    
 
     const navClass = ({ isCurrent }) => ({
         class: isCurrent ? 'sidebar-btn active' : 'sidebar-btn'
     });
-
 
     async function logout() {
 
@@ -25,19 +25,17 @@
             navigate('/');
 
         } catch (error) {
-            toast.error(error.data.errorMessage);
+            toast.error(error?.data?.errorMessage);
         }
-    };
-
-    
+    }
 
 </script>
 
 
 <nav class="sidebar">
-    <Link to="/" class="sidebar-brand">Foodie</Link>
+    <Link to={$user ? '/home' : '/'} class="sidebar-brand">Foodie</Link>
 
-    <Link to="/" getProps={navClass}>
+    <Link to="/home" getProps={navClass}>
         {@html homeIcon}
         Home
     </Link>
