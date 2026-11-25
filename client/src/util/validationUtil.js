@@ -1,4 +1,3 @@
-export function isValidEmail() {
-        emailTouched = true;
-        emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+export function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     };

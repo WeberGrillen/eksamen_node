@@ -1,6 +1,7 @@
 import { Router } from "express";
 import db from '../database/connection.js';
 import { compareHashedPasswords, hashPassword } from "../utils/passwordHashing.js";
+import { sendConfirmationEmail } from "../utils/emailService.js";
 
 const router = Router();
 
@@ -54,6 +55,12 @@ router.post('/api/auth/register', async (req, res) => {
         return res.status(500).send({
             data: { errorMessage: "Something went wrong with creating a user"}
         });
+    }
+
+    try {
+        await sendConfirmationEmail(name, email);
+    } catch (error) {
+        console.error('Email failed: ', error)
     }
 
     res.status(201).send({
